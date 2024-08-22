@@ -42,35 +42,9 @@ type ParsedRoute = {
   params?: Record<string, any> | undefined;
 };
 
-/**
- * Utility to parse a path string to initial state object accepted by the container.
- * This is useful for deep linking when we need to handle the incoming URL.
- *
- * @example
- * ```js
- * getStateFromPath(
- *   '/chat/jane/42',
- *   {
- *     screens: {
- *       Chat: {
- *         path: 'chat/:author/:id',
- *         parse: { id: Number }
- *       }
- *     }
- *   }
- * )
- * ```
- * @param path Path string to parse and convert, e.g. /foo/bar?count=42.
- * @param options Extra options to fine-tune how to parse the path.
- */
-export function getStateFromPath<ParamList extends {}>(
-  path: string,
+function prapereInitialRoutes<ParamList extends {}>(
   options?: Options<ParamList>
-): ResultState | undefined {
-  if (options) {
-    validatePathConfig(options);
-  }
-
+) {
   const initialRoutes: InitialRouteConfig[] = [];
 
   if (options?.initialRouteName) {
@@ -80,49 +54,13 @@ export function getStateFromPath<ParamList extends {}>(
     });
   }
 
-  const screens = options?.screens;
+  return initialRoutes;
+}
 
-  let remaining = path
-    .replace(/\/+/g, '/') // Replace multiple slash (//) with single ones
-    .replace(/^\//, '') // Remove extra leading slash
-    .replace(/\?.*$/, ''); // Remove query params which we will handle later
-
-  // Make sure there is a trailing slash
-  remaining = remaining.endsWith('/') ? remaining : `${remaining}/`;
-
-  const prefix = options?.path?.replace(/^\//, ''); // Remove extra leading slash
-
-  if (prefix) {
-    // Make sure there is a trailing slash
-    const normalizedPrefix = prefix.endsWith('/') ? prefix : `${prefix}/`;
-
-    // If the path doesn't start with the prefix, it's not a match
-    if (!remaining.startsWith(normalizedPrefix)) {
-      return undefined;
-    }
-
-    // Remove the prefix from the path
-    remaining = remaining.replace(normalizedPrefix, '');
-  }
-
-  if (screens === undefined) {
-    // When no config is specified, use the path segments as route names
-    const routes = remaining
-      .split('/')
-      .filter(Boolean)
-      .map((segment) => {
-        const name = decodeURIComponent(segment);
-        return { name };
-      });
-
-    if (routes.length) {
-      return createNestedStateObject(path, routes, initialRoutes);
-    }
-
-    return undefined;
-  }
-
-  // Create a normalized configs array which will be easier to use
+function prepareNormalizedConfigs<ParamList extends {}>(
+  screens: PathConfigMap<ParamList>,
+  initialRoutes: InitialRouteConfig[]
+): RouteConfig[] {
   const configs = ([] as RouteConfig[])
     .concat(
       ...Object.keys(screens).map((key) =>
@@ -186,7 +124,10 @@ export function getStateFromPath<ParamList extends {}>(
       return bParts.length - aParts.length;
     });
 
-  // Check for duplicate patterns in the config
+  return configs;
+}
+
+function checkForDuplicatesInConfigs(configs: RouteConfig[]) {
   configs.reduce<Record<string, RouteConfig>>((acc, config) => {
     if (acc[config.pattern]) {
       const a = acc[config.pattern].routeNames;
@@ -214,18 +155,102 @@ export function getStateFromPath<ParamList extends {}>(
       [config.pattern]: config,
     });
   }, {});
+}
+
+function matchConfigs(configs: RouteConfig[]) {
+  return configs.find(
+    (config) =>
+      config.path === '' &&
+      config.routeNames.every(
+        // Make sure that none of the parent configs have a non-empty path defined
+        (name) => !configs.find((c) => c.screen === name)?.path
+      )
+  );
+}
+
+/**
+ * Utility to parse a path string to initial state object accepted by the container.
+ * This is useful for deep linking when we need to handle the incoming URL.
+ *
+ * @example
+ * ```js
+ * getStateFromPath(
+ *   '/chat/jane/42',
+ *   {
+ *     screens: {
+ *       Chat: {
+ *         path: 'chat/:author/:id',
+ *         parse: { id: Number }
+ *       }
+ *     }
+ *   }
+ * )
+ * ```
+ * @param path Path string to parse and convert, e.g. /foo/bar?count=42.
+ * @param options Extra options to fine-tune how to parse the path.
+ */
+export function getStateFromPath<ParamList extends {}>(
+  path: string,
+  options?: Options<ParamList>
+): ResultState | undefined {
+  if (options) {
+    validatePathConfig(options);
+  }
+
+  const initialRoutes = prapereInitialRoutes(options);
+
+  const screens = options?.screens;
+
+  let remaining = path
+    .replace(/\/+/g, '/') // Replace multiple slash (//) with single ones
+    .replace(/^\//, '') // Remove extra leading slash
+    .replace(/\?.*$/, ''); // Remove query params which we will handle later
+
+  // Make sure there is a trailing slash
+  remaining = remaining.endsWith('/') ? remaining : `${remaining}/`;
+
+  const prefix = options?.path?.replace(/^\//, ''); // Remove extra leading slash
+
+  if (prefix) {
+    // Make sure there is a trailing slash
+    const normalizedPrefix = prefix.endsWith('/') ? prefix : `${prefix}/`;
+
+    // If the path doesn't start with the prefix, it's not a match
+    if (!remaining.startsWith(normalizedPrefix)) {
+      return undefined;
+    }
+
+    // Remove the prefix from the path
+    remaining = remaining.replace(normalizedPrefix, '');
+  }
+
+  if (screens === undefined) {
+    // When no config is specified, use the path segments as route names
+    const routes = remaining
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => {
+        const name = decodeURIComponent(segment);
+        return { name };
+      });
+
+    if (routes.length) {
+      return createNestedStateObject(path, routes, initialRoutes);
+    }
+
+    return undefined;
+  }
+
+  // Create a normalized configs array which will be easier to use
+  const configs = prepareNormalizedConfigs(screens, initialRoutes);
+
+  // Check for duplicate patterns in the config
+  checkForDuplicatesInConfigs(configs);
 
   if (remaining === '/') {
     // We need to add special handling of empty path so navigation to empty path also works
     // When handling empty path, we should only look at the root level config
-    const match = configs.find(
-      (config) =>
-        config.path === '' &&
-        config.routeNames.every(
-          // Make sure that none of the parent configs have a non-empty path defined
-          (name) => !configs.find((c) => c.screen === name)?.path
-        )
-    );
+    const match = matchConfigs(configs);
 
     if (match) {
       return createNestedStateObject(
