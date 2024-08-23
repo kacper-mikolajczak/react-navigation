@@ -42,6 +42,13 @@ type ParsedRoute = {
   params?: Record<string, any> | undefined;
 };
 
+type CacheValue = {
+  initialRoutes: InitialRouteConfig[];
+  configs: RouteConfig[];
+};
+
+const getStateFromPathOptionsCache = new Map<Options<{}>, CacheValue>();
+
 function prapereInitialRoutes<ParamList extends {}>(
   options?: Options<ParamList>
 ) {
@@ -168,6 +175,32 @@ function matchConfigs(configs: RouteConfig[]) {
   );
 }
 
+function getConfigStuffFromCache<ParamList extends {}>(
+  options: Options<ParamList>
+) {
+  if (getStateFromPathOptionsCache.has(options)) {
+    return getStateFromPathOptionsCache.get(options)!;
+  }
+
+  // If no cached value found, create new InitialRoutes and Configs
+
+  const initialRoutes = prapereInitialRoutes(options);
+
+  const configs = prepareNormalizedConfigs(options.screens, initialRoutes);
+
+  checkForDuplicatesInConfigs(configs);
+
+  getStateFromPathOptionsCache.set(options, {
+    initialRoutes,
+    configs,
+  });
+
+  return {
+    initialRoutes,
+    configs,
+  } as const;
+}
+
 /**
  * Utility to parse a path string to initial state object accepted by the container.
  * This is useful for deep linking when we need to handle the incoming URL.
@@ -198,7 +231,7 @@ export function getStateFromPath<ParamList extends {}>(
     validatePathConfig(options);
   }
 
-  const initialRoutes = prapereInitialRoutes(options);
+  const { initialRoutes, configs } = getConfigStuffFromCache(options!);
 
   const screens = options?.screens;
 
@@ -244,9 +277,6 @@ export function getStateFromPath<ParamList extends {}>(
     console.log('DEV', '3', performance.now() - start);
     return undefined;
   }
-
-  // Create a normalized configs array which will be easier to use
-  const configs = prepareNormalizedConfigs(screens, initialRoutes);
 
   // Check for duplicate patterns in the config
   checkForDuplicatesInConfigs(configs);
