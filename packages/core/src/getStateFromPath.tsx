@@ -193,6 +193,7 @@ export function getStateFromPath<ParamList extends {}>(
   path: string,
   options?: Options<ParamList>
 ): ResultState | undefined {
+  const start = performance.now();
   if (options) {
     validatePathConfig(options);
   }
@@ -217,6 +218,7 @@ export function getStateFromPath<ParamList extends {}>(
 
     // If the path doesn't start with the prefix, it's not a match
     if (!remaining.startsWith(normalizedPrefix)) {
+      console.log('DEV', '1', performance.now() - start);
       return undefined;
     }
 
@@ -235,9 +237,11 @@ export function getStateFromPath<ParamList extends {}>(
       });
 
     if (routes.length) {
+      console.log('DEV', '2', performance.now() - start);
       return createNestedStateObject(path, routes, initialRoutes);
     }
 
+    console.log('DEV', '3', performance.now() - start);
     return undefined;
   }
 
@@ -253,13 +257,18 @@ export function getStateFromPath<ParamList extends {}>(
     const match = matchConfigs(configs);
 
     if (match) {
-      return createNestedStateObject(
+      const result = createNestedStateObject(
         path,
         match.routeNames.map((name) => ({ name })),
         initialRoutes,
         configs
       );
+
+      console.log('DEV', '4', performance.now() - start);
+      return result;
     }
+
+    console.log('DEV', '5', performance.now() - start);
 
     return undefined;
   }
@@ -286,8 +295,11 @@ export function getStateFromPath<ParamList extends {}>(
   }
 
   if (current == null || result == null) {
+    console.log('DEV', '6', performance.now() - start);
     return undefined;
   }
+
+  console.log('DEV', '7', performance.now() - start);
 
   return result;
 }
