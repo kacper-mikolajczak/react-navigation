@@ -1,4 +1,7 @@
+import { linkingConfig } from './config/linking';
+
 export const COMMON_LINKING_CONFIG = {
+  ...linkingConfig.screens,
   Article: {
     path: 'article/:author?',
     parse: {

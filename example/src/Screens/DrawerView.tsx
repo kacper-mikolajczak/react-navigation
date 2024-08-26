@@ -1,10 +1,15 @@
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Button } from '@react-navigation/elements';
-import { useLocale, useTheme } from '@react-navigation/native';
+import {
+  getStateFromPath,
+  useLocale,
+  useTheme,
+} from '@react-navigation/native';
 import * as React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Drawer } from 'react-native-drawer-layout';
 
+import { linkingConfig } from '../config/linking';
 import { DrawerProgress } from '../Shared/DrawerProgress';
 
 const DRAWER_TYPES = ['front', 'back', 'slide'] as const;
@@ -44,7 +49,10 @@ export function DrawerView() {
         <View style={styles.buttons}>
           <Button
             variant="filled"
-            onPress={() => setOpen((prevOpen) => !prevOpen)}
+            onPress={() => {
+              setOpen((prevOpen) => !prevOpen);
+              getStateFromPath('/drawer', linkingConfig as any);
+            }}
           >
             {open ? 'Close' : 'Open'} drawer
           </Button>
